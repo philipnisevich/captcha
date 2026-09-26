@@ -31,9 +31,11 @@ final class HingeVerificationModel {
     }
   }
 
-  private static let possibleAngles = [45.0, 90.0, 135.0]
+  private static let targetCount = 3
+  private static let targetRange = 105...170
+  private static let minimumTargetSeparation = 10
+  private static let targetTolerance = 4.0
 
-  private let targetTolerance = 7.0
   private let holdDuration = 1.0
 
   private(set) var targetAngles: [Double]
@@ -46,7 +48,7 @@ final class HingeVerificationModel {
   @ObservationIgnored private var holdStartedAt: Date?
 
   init() {
-    targetAngles = Self.possibleAngles.shuffled()
+    targetAngles = Self.makeTargetSequence()
   }
 
   var isVerified: Bool {
@@ -106,7 +108,7 @@ final class HingeVerificationModel {
     case .closeSlightly:
       return "Current angle: \(currentAngleText). Close slightly to reach \(currentTargetText)."
     case .holding:
-      return "Stay within 7° of \(currentTargetText) for one second."
+      return "Stay within \(Int(Self.targetTolerance))° of \(currentTargetText) for one second."
     case .verified:
       return "All three angle holds are complete."
     case .noHinge:
@@ -128,7 +130,7 @@ final class HingeVerificationModel {
       return
     }
 
-    guard abs(clampedAngle - currentTargetAngle) <= targetTolerance else {
+    guard abs(clampedAngle - currentTargetAngle) <= Self.targetTolerance else {
       stopHolding()
       phase = clampedAngle < currentTargetAngle ? .openMore : .closeSlightly
       return
@@ -146,10 +148,27 @@ final class HingeVerificationModel {
 
   func startNewChallenge() {
     stopHolding()
-    targetAngles = Self.possibleAngles.shuffled()
+    targetAngles = Self.makeTargetSequence(avoiding: targetAngles)
     currentStepIndex = 0
     angleDegrees = nil
     phase = .waiting
+  }
+
+  private static func makeTargetSequence(avoiding previousSequence: [Double]? = nil) -> [Double] {
+    while true {
+      var sequence: [Double] = []
+
+      while sequence.count < targetCount {
+        let candidate = Double(Int.random(in: targetRange))
+        guard sequence.allSatisfy({
+          abs($0 - candidate) >= Double(minimumTargetSeparation)
+        }) else { continue }
+        sequence.append(candidate)
+      }
+
+      guard sequence != previousSequence else { continue }
+      return sequence
+    }
   }
 
   private func beginHolding() {
