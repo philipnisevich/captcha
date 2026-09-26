@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct AppDefinition: App {
+struct FoldCheckApp: App {
   var body: some Scene {
     WindowGroup {
       ContentView()
