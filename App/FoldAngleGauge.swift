@@ -28,22 +28,37 @@ struct FoldAngleGauge: View {
           }
 
           for tickDegrees in stride(from: 0.0, through: 180.0, by: 30.0) {
-            let isTarget = abs(tickDegrees - targetDegrees) < 0.1
             let outer = point(for: tickDegrees, center: center, radius: radius)
-            let inner = point(
-              for: tickDegrees,
-              center: center,
-              radius: radius - (isTarget ? 19 : 10)
-            )
+            let inner = point(for: tickDegrees, center: center, radius: radius - 10)
             var tick = Path()
             tick.move(to: inner)
             tick.addLine(to: outer)
             context.stroke(
               tick,
-              with: .color(isTarget ? Color.accentColor : Color.secondary.opacity(0.55)),
-              lineWidth: isTarget ? 2.5 : 1.5
+              with: .color(Color.secondary.opacity(0.55)),
+              lineWidth: 1.5
             )
           }
+
+          let targetInner = point(for: targetDegrees, center: center, radius: radius - 20)
+          let targetOuter = point(for: targetDegrees, center: center, radius: radius + 1)
+          var targetTick = Path()
+          targetTick.move(to: targetInner)
+          targetTick.addLine(to: targetOuter)
+          context.stroke(targetTick, with: .color(Color.accentColor), lineWidth: 2.5)
+
+          let targetMarker = point(for: targetDegrees, center: center, radius: radius)
+          let targetRect = CGRect(
+            x: targetMarker.x - 5,
+            y: targetMarker.y - 5,
+            width: 10,
+            height: 10
+          )
+          context.fill(
+            Path(ellipseIn: targetRect.insetBy(dx: -2.5, dy: -2.5)),
+            with: .color(Color(uiColor: .secondarySystemGroupedBackground))
+          )
+          context.fill(Path(ellipseIn: targetRect), with: .color(Color.accentColor))
 
           if let angleDegrees {
             let marker = point(
@@ -84,7 +99,9 @@ struct FoldAngleGauge: View {
   }
 
   private var accessibilityValue: String {
-    guard let angleDegrees else { return "Waiting for hinge movement. Target 90 degrees." }
+    guard let angleDegrees else {
+      return "Waiting for hinge movement. Target \(Int(targetDegrees)) degrees."
+    }
     return "\(Int(angleDegrees.rounded())) degrees. Target \(Int(targetDegrees)) degrees."
   }
 

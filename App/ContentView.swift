@@ -84,7 +84,7 @@ struct ContentView: View {
           .font(.system(.largeTitle, design: .rounded).weight(.bold))
           .fixedSize(horizontal: false, vertical: true)
 
-        Text("Fold your iPhone Duo to 90° and hold it steady for one second.")
+        Text("Follow three different angle targets. Hold each one steady for a second to complete the check.")
           .font(.body)
           .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
@@ -132,13 +132,13 @@ struct ContentView: View {
             .tracking(1.3)
             .foregroundStyle(.secondary)
 
-          Text("90°")
+          Text(verification.currentTargetText)
             .font(.system(.title, design: .rounded).weight(.bold))
         }
 
         Spacer(minLength: 12)
 
-        Text(verification.isVerified ? "PASSED" : "1 SEC HOLD")
+        Text(verification.isVerified ? "COMPLETE" : "ANGLE \(verification.currentStepNumber) OF \(verification.totalStepCount)")
           .font(.caption2.weight(.bold))
           .tracking(0.8)
           .foregroundStyle(verification.isVerified ? Color.green : Color.secondary)
@@ -149,9 +149,11 @@ struct ContentView: View {
 
       FoldAngleGauge(
         angleDegrees: verification.angleDegrees,
-        targetDegrees: HingeVerificationModel.targetAngle
+        targetDegrees: verification.currentTargetAngle
       )
       .frame(height: 196)
+
+      challengeProgress
 
       Divider()
 
@@ -160,9 +162,9 @@ struct ContentView: View {
 
       if verification.isVerified {
         Button {
-          verification.reset()
+          verification.startNewChallenge()
         } label: {
-          Label("Try again", systemImage: "arrow.counterclockwise")
+          Label("New challenge", systemImage: "arrow.counterclockwise")
             .font(.headline)
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
@@ -174,7 +176,7 @@ struct ContentView: View {
             .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
-        .accessibilityHint("Starts a new hinge angle challenge.")
+        .accessibilityHint("Starts a new three-angle captcha.")
       }
     }
     .padding(24)
@@ -215,6 +217,30 @@ struct ContentView: View {
     }
   }
 
+  private var challengeProgress: some View {
+    HStack(spacing: 7) {
+      ForEach(0..<verification.totalStepCount, id: \.self) { step in
+        Capsule()
+          .fill(stepColor(for: step))
+          .frame(maxWidth: .infinity)
+          .frame(height: 6)
+      }
+    }
+    .accessibilityElement()
+    .accessibilityLabel("Captcha progress")
+    .accessibilityValue("\(verification.completedStepCount) of \(verification.totalStepCount) angles complete")
+  }
+
+  private func stepColor(for step: Int) -> Color {
+    if step < verification.completedStepCount {
+      return .accentColor
+    }
+    if step == verification.currentStepIndex && !verification.isVerified {
+      return Color.accentColor.opacity(0.35)
+    }
+    return Color.primary.opacity(0.08)
+  }
+
   private var holdProgress: some View {
     GeometryReader { geometry in
       ZStack(alignment: .leading) {
@@ -228,7 +254,7 @@ struct ContentView: View {
     }
     .frame(height: 7)
     .accessibilityElement()
-    .accessibilityLabel("Hold progress")
+    .accessibilityLabel("Current angle hold progress")
     .accessibilityValue("\(Int(verification.holdProgress * 100)) percent")
   }
 

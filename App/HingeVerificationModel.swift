@@ -31,11 +31,13 @@ final class HingeVerificationModel {
     }
   }
 
-  static let targetAngle = 90.0
+  private static let possibleAngles = [45.0, 90.0, 135.0]
 
   private let targetTolerance = 7.0
   private let holdDuration = 1.0
 
+  private(set) var targetAngles: [Double]
+  private(set) var currentStepIndex = 0
   private(set) var phase: Phase = .waiting
   private(set) var angleDegrees: Double?
   private(set) var holdProgress = 0.0
@@ -43,8 +45,32 @@ final class HingeVerificationModel {
   @ObservationIgnored private var holdTask: Task<Void, Never>?
   @ObservationIgnored private var holdStartedAt: Date?
 
+  init() {
+    targetAngles = Self.possibleAngles.shuffled()
+  }
+
   var isVerified: Bool {
     phase == .verified
+  }
+
+  var currentTargetAngle: Double {
+    targetAngles[min(currentStepIndex, targetAngles.count - 1)]
+  }
+
+  var currentTargetText: String {
+    "\(Int(currentTargetAngle.rounded()))°"
+  }
+
+  var currentStepNumber: Int {
+    min(currentStepIndex + 1, totalStepCount)
+  }
+
+  var totalStepCount: Int {
+    targetAngles.count
+  }
+
+  var completedStepCount: Int {
+    isVerified ? totalStepCount : currentStepIndex
   }
 
   var currentAngleText: String {
@@ -63,7 +89,7 @@ final class HingeVerificationModel {
     case .holding:
       return "Hold it steady"
     case .verified:
-      return "Human check passed"
+      return "Captcha complete"
     case .noHinge:
       return "Hinge sensor unavailable"
     case .requiresIOS27:
@@ -74,15 +100,15 @@ final class HingeVerificationModel {
   var statusDescription: String {
     switch phase {
     case .waiting:
-      return "Fold to 90° to begin the live check."
+      return "Move toward \(currentTargetText) to begin. Complete all three angles."
     case .openMore:
-      return "Current angle: \(currentAngleText). Open slightly to reach 90°."
+      return "Current angle: \(currentAngleText). Open slightly to reach \(currentTargetText)."
     case .closeSlightly:
-      return "Current angle: \(currentAngleText). Close slightly to reach 90°."
+      return "Current angle: \(currentAngleText). Close slightly to reach \(currentTargetText)."
     case .holding:
-      return "Stay between 83° and 97° for one second."
+      return "Stay within 7° of \(currentTargetText) for one second."
     case .verified:
-      return "The hinge held at 90° for one second."
+      return "All three angle holds are complete."
     case .noHinge:
       return "Open this challenge on iPhone Duo to use its hinge sensor."
     case .requiresIOS27:
@@ -98,13 +124,13 @@ final class HingeVerificationModel {
 
     guard isPartiallyOpen else {
       stopHolding()
-      phase = clampedAngle < Self.targetAngle ? .openMore : .closeSlightly
+      phase = clampedAngle < currentTargetAngle ? .openMore : .closeSlightly
       return
     }
 
-    guard abs(clampedAngle - Self.targetAngle) <= targetTolerance else {
+    guard abs(clampedAngle - currentTargetAngle) <= targetTolerance else {
       stopHolding()
-      phase = clampedAngle < Self.targetAngle ? .openMore : .closeSlightly
+      phase = clampedAngle < currentTargetAngle ? .openMore : .closeSlightly
       return
     }
 
@@ -118,8 +144,10 @@ final class HingeVerificationModel {
     phase = isSupportedOS ? .noHinge : .requiresIOS27
   }
 
-  func reset() {
+  func startNewChallenge() {
     stopHolding()
+    targetAngles = Self.possibleAngles.shuffled()
+    currentStepIndex = 0
     angleDegrees = nil
     phase = .waiting
   }
@@ -143,11 +171,26 @@ final class HingeVerificationModel {
         self.holdProgress = min(Date().timeIntervalSince(startedAt) / self.holdDuration, 1)
 
         guard self.holdProgress >= 1 else { continue }
-        self.phase = .verified
-        self.holdTask = nil
+        self.finishCurrentStep()
         return
       }
     }
+  }
+
+  private func finishCurrentStep() {
+    holdStartedAt = nil
+    holdTask = nil
+
+    guard currentStepIndex + 1 < totalStepCount else {
+      holdProgress = 1
+      phase = .verified
+      return
+    }
+
+    currentStepIndex += 1
+    holdProgress = 0
+    let currentAngle = angleDegrees ?? currentTargetAngle
+    phase = currentAngle < currentTargetAngle ? .openMore : .closeSlightly
   }
 
   private func stopHolding() {
